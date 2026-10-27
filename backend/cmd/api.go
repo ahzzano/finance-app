@@ -6,7 +6,7 @@ import (
 )
 
 type APIConfig struct {
-	addr string
+	Addr string
 }
 
 type API struct {
@@ -26,9 +26,8 @@ func (a *API) Mount() {
 }
 
 func (a *API) Run() {
-	err := http.ListenAndServe(a.config.addr, a.mux)
+	err := http.ListenAndServe(a.config.Addr, a.mux)
 	if err != nil {
 	    log.Fatalf("Server failed to start: %v", err)
 	}
-
 }

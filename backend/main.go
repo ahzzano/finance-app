@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"backend/cmd"
+)
 
 func main() {
-    fmt.Println("Hello world!")
+    api := cmd.NewAPI(cmd.APIConfig{
+        Addr: ":8080",
+    })
+    api.Mount()
+    api.Run()
 }
