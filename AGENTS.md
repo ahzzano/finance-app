@@ -15,3 +15,6 @@ Go, PostgreSQL (Supabase)
 
 ## Frontend
 next.js
+
+# Guidelines
+- Prefer to write failing integration tests first before the implementation

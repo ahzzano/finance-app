@@ -9,7 +9,9 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 <!-- END:nextjs-agent-rules -->
 
 # Frontend
-This is the frontend of the ap
+This is the frontend of the app
 
 # Notes
+- Prefer to use hooks, not classes
 - If a tailwind component exists, always prefer to use the tailwind component over creating your own
+- Use zod for validating form inputs. Always validate before sending to the backend.
