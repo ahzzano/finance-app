@@ -1,0 +1,116 @@
+basePath: /
+definitions:
+  services.ErrorResponse:
+    properties:
+      data: {}
+      errors:
+        items:
+          type: string
+        type: array
+    type: object
+  users.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  users.registerRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+  users.tokenData:
+    properties:
+      token:
+        type: string
+    type: object
+  users.tokenResponse:
+    properties:
+      data:
+        $ref: '#/definitions/users.tokenData'
+      errors:
+        items:
+          type: string
+        type: array
+    type: object
+info:
+  contact: {}
+  title: Budgeting App API
+  version: "1.0"
+paths:
+  /api/users/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/users.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/users.tokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: Log in
+      tags:
+      - users
+  /api/users/register:
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Registration details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/users.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/users.tokenResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: Register a user
+      tags:
+      - users
+swagger: "2.0"
