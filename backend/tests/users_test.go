@@ -1,146 +1,44 @@
 package tests
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
-	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
-
-	"backend/cmd"
-
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/joho/godotenv"
 )
 
-// Migrations must already be applied:
-// goose -dir internal/database/migrations postgres "$TEST_DATABASE_URL" up
-var (
-	pool *pgxpool.Pool
-	srv  *httptest.Server
-)
-
-func TestMain(m *testing.M) {
-	_ = godotenv.Load("../.env")
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		fmt.Println("TEST_DATABASE_URL not set; skipping integration tests")
-		os.Exit(0)
-	}
-	var err error
-	pool, err = pgxpool.New(context.Background(), url)
-	if err != nil {
-		fmt.Println("db connect:", err)
-		os.Exit(1)
-	}
-	api := cmd.NewAPI(cmd.APIConfig{DB: pool})
-	api.Mount()
-	srv = httptest.NewServer(api.Handler())
-	code := m.Run()
-	srv.Close()
-	pool.Close()
-	os.Exit(code)
-}
-
-func resetDB(t *testing.T) {
+// wantSession asserts status, data == {"name": wantName}, null errors and the session cookie attributes; returns the cookie value.
+func wantSession(t *testing.T, resp *http.Response, env envelope, status int, wantName string) string {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(), "TRUNCATE users, sessions, failed_logins RESTART IDENTITY CASCADE"); err != nil {
-		t.Fatal(err)
+	wantStatus(t, resp, status)
+	if len(env.Data) != 1 || env.Data["name"] != wantName || env.Errors != nil {
+		t.Fatalf("want data {name:%q} and null errors, got %+v", wantName, env)
 	}
+	c := sessionCookie(resp)
+	if c == nil || c.Value == "" {
+		t.Fatal("no session cookie")
+	}
+	if !c.HttpOnly || !c.Secure || c.SameSite != http.SameSiteLaxMode || c.Path != "/" || c.MaxAge != 7*24*3600 {
+		t.Fatalf("bad cookie attributes: %+v", c)
+	}
+	return c.Value
 }
 
-type envelope struct {
-	Data   map[string]any `json:"data"`
-	Errors []string       `json:"errors"`
-}
-
-// doJSON sends body (string sent raw) and decodes the envelope.
-func doJSON(t *testing.T, method, path string, body any) (*http.Response, envelope) {
+// wantField asserts a 400 VALIDATION_ERROR whose first error has the given field.
+func wantField(t *testing.T, resp *http.Response, env envelope, field string) {
 	t.Helper()
-	var r io.Reader
-	switch b := body.(type) {
-	case nil:
-	case string:
-		r = strings.NewReader(b)
-	default:
-		raw, err := json.Marshal(b)
-		if err != nil {
-			t.Fatal(err)
-		}
-		r = bytes.NewReader(raw)
+	wantStatus(t, resp, http.StatusBadRequest)
+	wantError(t, env, "VALIDATION_ERROR")
+	if env.Errors[0].Field != field {
+		t.Fatalf("field = %q, want %q", env.Errors[0].Field, field)
 	}
-	req, err := http.NewRequest(method, srv.URL+path, r)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	var env envelope
-	raw, _ := io.ReadAll(resp.Body)
-	_ = json.Unmarshal(raw, &env)
-	return resp, env
-}
-
-type m = map[string]string
-
-func register(t *testing.T, email, pw, name string) (*http.Response, envelope) {
-	t.Helper()
-	return doJSON(t, http.MethodPut, "/api/users/register", m{"email": email, "password": pw, "name": name})
-}
-
-func login(t *testing.T, email, pw string) (*http.Response, envelope) {
-	t.Helper()
-	return doJSON(t, http.MethodPost, "/api/users/login", m{"email": email, "password": pw})
-}
-
-func wantStatus(t *testing.T, resp *http.Response, want int) {
-	t.Helper()
-	if resp.StatusCode != want {
-		t.Fatalf("status = %d, want %d", resp.StatusCode, want)
-	}
-}
-
-// wantError asserts the error envelope: data null, errors non-empty.
-func wantError(t *testing.T, env envelope) {
-	t.Helper()
-	if env.Data != nil || len(env.Errors) == 0 {
-		t.Fatalf("want data=null and non-empty errors, got %+v", env)
-	}
-}
-
-func wantToken(t *testing.T, resp *http.Response, env envelope) string {
-	t.Helper()
-	wantStatus(t, resp, http.StatusOK)
-	tok, _ := env.Data["token"].(string)
-	if tok == "" || env.Errors != nil {
-		t.Fatalf("want token and null errors, got %+v", env)
-	}
-	for _, c := range resp.Cookies() {
-		if c.Name == "session" {
-			if c.Value != tok {
-				t.Fatalf("cookie %q != token %q", c.Value, tok)
-			}
-			return tok
-		}
-	}
-	t.Fatal("no session cookie")
-	return ""
 }
 
 func TestRegister(t *testing.T) {
 	resetDB(t)
-	resp, env := register(t, "  A@X.com ", "password123", "Alice")
-	tok := wantToken(t, resp, env)
+	resp, env := register(t, "  A@X.com ", "password123", "  Alice ")
+	tok := wantSession(t, resp, env, http.StatusCreated, "Alice")
 
 	h := sha256.Sum256([]byte(tok))
 	var n int
@@ -164,12 +62,12 @@ func TestRegister(t *testing.T) {
 func TestRegisterDuplicate(t *testing.T) {
 	resetDB(t)
 	resp, env := register(t, "a@x.com", "password123", "Alice")
-	wantToken(t, resp, env)
+	wantSession(t, resp, env, http.StatusCreated, "Alice")
 	for _, email := range []string{"a@x.com", "A@x.com"} {
 		t.Run(email, func(t *testing.T) {
 			resp, env := register(t, email, "password123", "Alice")
 			wantStatus(t, resp, http.StatusConflict)
-			wantError(t, env)
+			wantError(t, env, "CONFLICT")
 		})
 	}
 }
@@ -177,35 +75,24 @@ func TestRegisterDuplicate(t *testing.T) {
 func TestRegisterBadRequest(t *testing.T) {
 	resetDB(t)
 	tests := []struct {
-		name string
-		body any
+		name  string
+		body  any
+		field string
 	}{
-		{"malformed json", "{not json"},
-		{"empty body", ""},
-		{"missing email", m{"password": "password123", "name": "A"}},
-		{"missing password", m{"email": "a@x.com", "name": "A"}},
-		{"missing name", m{"email": "a@x.com", "password": "password123"}},
-		{"invalid email", m{"email": "not-an-email", "password": "password123", "name": "A"}},
-		{"password 7 bytes", m{"email": "a@x.com", "password": strings.Repeat("a", 7), "name": "A"}},
-		{"password 73 bytes", m{"email": "a@x.com", "password": strings.Repeat("a", 73), "name": "A"}},
-		{"whitespace name", m{"email": "a@x.com", "password": "password123", "name": "   "}},
+		{"malformed json", "{not json", ""},
+		{"empty body", "", ""},
+		{"missing email", m{"password": "password123", "name": "A"}, "email"},
+		{"invalid email", m{"email": "not-an-email", "password": "password123", "name": "A"}, "email"},
+		{"missing password", m{"email": "a@x.com", "name": "A"}, "password"},
+		{"password 7 bytes", m{"email": "a@x.com", "password": strings.Repeat("a", 7), "name": "A"}, "password"},
+		{"password 73 bytes", m{"email": "a@x.com", "password": strings.Repeat("a", 73), "name": "A"}, "password"},
+		{"missing name", m{"email": "a@x.com", "password": "password123"}, "name"},
+		{"whitespace name", m{"email": "a@x.com", "password": "password123", "name": "   "}, "name"},
 	}
-	for i, tc := range tests {
+	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			resp, env := doJSON(t, http.MethodPut, "/api/users/register", tc.body)
-			wantStatus(t, resp, http.StatusBadRequest)
-			if i == 0 {
-				wantError(t, env)
-			}
-		})
-	}
-}
-
-func TestMethodNotAllowed(t *testing.T) {
-	for _, p := range []string{"/api/users/register", "/api/users/login"} {
-		t.Run(p, func(t *testing.T) {
-			resp, _ := doJSON(t, http.MethodGet, p, nil)
-			wantStatus(t, resp, http.StatusMethodNotAllowed)
+			resp, env := doJSON(t, http.MethodPost, "/api/users/register", tc.body)
+			wantField(t, resp, env, tc.field)
 		})
 	}
 }
@@ -213,31 +100,41 @@ func TestMethodNotAllowed(t *testing.T) {
 func TestLogin(t *testing.T) {
 	resetDB(t)
 	resp, env := register(t, "a@x.com", "password123", "Alice")
-	regTok := wantToken(t, resp, env)
+	regTok := wantSession(t, resp, env, http.StatusCreated, "Alice")
 
 	t.Run("correct", func(t *testing.T) {
 		resp, env := login(t, "a@x.com", "password123")
-		if tok := wantToken(t, resp, env); tok == regTok {
+		if tok := wantSession(t, resp, env, http.StatusOK, "Alice"); tok == regTok {
 			t.Error("login token equals registration token")
 		}
 	})
 	t.Run("email case-insensitive", func(t *testing.T) {
 		resp, env := login(t, "A@X.COM", "password123")
-		wantToken(t, resp, env)
+		wantSession(t, resp, env, http.StatusOK, "Alice")
 	})
 	t.Run("wrong password", func(t *testing.T) {
 		resp, env := login(t, "a@x.com", "wrongpass1")
 		wantStatus(t, resp, http.StatusUnauthorized)
-		wantError(t, env)
+		wantError(t, env, "AUTHENTICATION_ERROR")
+		if env.Errors[0].Field != "" {
+			t.Errorf("field = %q, want none", env.Errors[0].Field)
+		}
 	})
 	t.Run("unknown email", func(t *testing.T) {
 		resp, env := login(t, "nobody@x.com", "password123")
 		wantStatus(t, resp, http.StatusUnauthorized)
-		wantError(t, env)
+		wantError(t, env, "AUTHENTICATION_ERROR")
+		if env.Errors[0].Field != "" {
+			t.Errorf("field = %q, want none", env.Errors[0].Field)
+		}
 	})
 	t.Run("malformed json", func(t *testing.T) {
-		resp, _ := doJSON(t, http.MethodPost, "/api/users/login", "{bad")
-		wantStatus(t, resp, http.StatusBadRequest)
+		resp, env := doJSON(t, http.MethodPost, "/api/users/login", "{bad")
+		wantField(t, resp, env, "")
+	})
+	t.Run("empty password", func(t *testing.T) {
+		resp, env := login(t, "a@x.com", "")
+		wantField(t, resp, env, "password")
 	})
 }
 
@@ -252,23 +149,23 @@ func failLogins(t *testing.T, n int) {
 func TestLoginLockout(t *testing.T) {
 	resetDB(t)
 	resp, env := register(t, "a@x.com", "password123", "Alice")
-	wantToken(t, resp, env)
+	wantSession(t, resp, env, http.StatusCreated, "Alice")
 
 	t.Run("5 failures block correct password", func(t *testing.T) {
 		failLogins(t, 5)
 		resp, env := login(t, "a@x.com", "password123")
-		wantStatus(t, resp, http.StatusForbidden)
-		wantError(t, env)
+		wantStatus(t, resp, http.StatusTooManyRequests)
+		wantError(t, env, "RATE_LIMITED")
 	})
 
 	t.Run("success clears counter", func(t *testing.T) {
 		resetDB(t)
 		resp, env := register(t, "a@x.com", "password123", "Alice")
-		wantToken(t, resp, env)
+		wantSession(t, resp, env, http.StatusCreated, "Alice")
 		for range 2 {
 			failLogins(t, 4)
 			resp, env := login(t, "a@x.com", "password123")
-			wantToken(t, resp, env)
+			wantSession(t, resp, env, http.StatusOK, "Alice")
 		}
 	})
 }
