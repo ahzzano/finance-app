@@ -36,10 +36,16 @@ If the user allows you to edit `CONTRACT.md`, the format is as follows
 ## Feature Name 
 Endpoint: `METHOD /api/endpoint`
 
+Expected Inputs:
+{
+    "email": string,
+    "password": string
+}
+
 Expected Return: 
 {
     "data": {
-        "insert_data_here": "insert_value_here
+        "insert_data_here": "insert_value_here"
     },
     "errors": null
 }

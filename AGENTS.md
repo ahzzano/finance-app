@@ -17,4 +17,4 @@ Go, PostgreSQL (Supabase)
 next.js
 
 # Guidelines
-- Prefer to write failing integration tests first before the implementation
+- Write failing integration tests first before implementation

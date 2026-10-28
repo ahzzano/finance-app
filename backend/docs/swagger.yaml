@@ -1,0 +1,195 @@
+basePath: /
+definitions:
+  services.APIError:
+    properties:
+      field:
+        type: string
+      message:
+        type: string
+      type:
+        type: string
+    type: object
+  services.ErrorResponse:
+    properties:
+      data: {}
+      errors:
+        items:
+          $ref: '#/definitions/services.APIError'
+        type: array
+    type: object
+  users.loginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        type: string
+    type: object
+  users.messageData:
+    properties:
+      message:
+        type: string
+    type: object
+  users.messageResponse:
+    properties:
+      data:
+        $ref: '#/definitions/users.messageData'
+      errors:
+        items:
+          $ref: '#/definitions/services.APIError'
+        type: array
+    type: object
+  users.nameData:
+    properties:
+      name:
+        type: string
+    type: object
+  users.nameResponse:
+    properties:
+      data:
+        $ref: '#/definitions/users.nameData'
+      errors:
+        items:
+          $ref: '#/definitions/services.APIError'
+        type: array
+    type: object
+  users.profileData:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+    type: object
+  users.profileResponse:
+    properties:
+      data:
+        $ref: '#/definitions/users.profileData'
+      errors:
+        items:
+          $ref: '#/definitions/services.APIError'
+        type: array
+    type: object
+  users.registerRequest:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      password:
+        type: string
+    type: object
+info:
+  contact: {}
+  title: Budgeting App API
+  version: "1.0"
+paths:
+  /api/users/login:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Credentials
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/users.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/users.nameResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "429":
+          description: Too Many Requests
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: Log in
+      tags:
+      - users
+  /api/users/logout:
+    post:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/users.messageResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: Log out
+      tags:
+      - users
+  /api/users/profile:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/users.profileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: Get profile
+      tags:
+      - users
+  /api/users/register:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Registration details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/users.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/users.nameResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: Register a user
+      tags:
+      - users
+swagger: "2.0"
