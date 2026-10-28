@@ -125,9 +125,38 @@ func (q *Queries) DeleteFailedLogins(ctx context.Context, email string) ([]int64
 	return items, nil
 }
 
+const deleteSession = `-- name: DeleteSession :one
+DELETE FROM sessions WHERE id = $1 RETURNING id
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, id int64) (int64, error) {
+	row := q.db.QueryRowContext(ctx, deleteSession, id)
+	var id_2 int64
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
+const getActiveSession = `-- name: GetActiveSession :one
+SELECT id, user_id FROM sessions
+WHERE token_hash = $1 AND expires_at > now()
+`
+
+type GetActiveSessionRow struct {
+	ID     int64
+	UserID int64
+}
+
+func (q *Queries) GetActiveSession(ctx context.Context, tokenHash []byte) (GetActiveSessionRow, error) {
+	row := q.db.QueryRowContext(ctx, getActiveSession, tokenHash)
+	var i GetActiveSessionRow
+	err := row.Scan(&i.ID, &i.UserID)
+	return i, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT
     id,
+    name,
     password_hash
 FROM users
 WHERE email = $1
@@ -135,13 +164,30 @@ WHERE email = $1
 
 type GetUserByEmailRow struct {
 	ID           int64
+	Name         string
 	PasswordHash string
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
 	var i GetUserByEmailRow
-	err := row.Scan(&i.ID, &i.PasswordHash)
+	err := row.Scan(&i.ID, &i.Name, &i.PasswordHash)
+	return i, err
+}
+
+const getUserProfile = `-- name: GetUserProfile :one
+SELECT name, email FROM users WHERE id = $1
+`
+
+type GetUserProfileRow struct {
+	Name  string
+	Email string
+}
+
+func (q *Queries) GetUserProfile(ctx context.Context, id int64) (GetUserProfileRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserProfile, id)
+	var i GetUserProfileRow
+	err := row.Scan(&i.Name, &i.Email)
 	return i, err
 }
 

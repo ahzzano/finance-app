@@ -12,6 +12,7 @@ INSERT INTO users (
 -- name: GetUserByEmail :one
 SELECT
     id,
+    name,
     password_hash
 FROM users
 WHERE email = @email;
@@ -39,3 +40,13 @@ DELETE FROM failed_logins WHERE email = @email RETURNING id;
 
 -- name: LockEmail :exec
 SELECT pg_advisory_xact_lock(hashtext(@email));
+
+-- name: GetActiveSession :one
+SELECT id, user_id FROM sessions
+WHERE token_hash = @token_hash AND expires_at > now();
+
+-- name: DeleteSession :one
+DELETE FROM sessions WHERE id = @id RETURNING id;
+
+-- name: GetUserProfile :one
+SELECT name, email FROM users WHERE id = @id;
