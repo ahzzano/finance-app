@@ -24,3 +24,13 @@ SELECT
 FROM accounts
 WHERE user_id = @user_id
 ORDER BY created_at, id;
+
+-- name: DeleteAccount :one
+DELETE FROM accounts
+WHERE id = @id
+  AND user_id = @user_id
+RETURNING
+    id::text AS id,
+    name,
+    currency,
+    balance_in_minor_units;

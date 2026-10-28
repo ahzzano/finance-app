@@ -7,6 +7,8 @@ package database
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const createAccount = `-- name: CreateAccount :one
@@ -49,6 +51,41 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		arg.BalanceInMinorUnits,
 	)
 	var i CreateAccountRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Currency,
+		&i.BalanceInMinorUnits,
+	)
+	return i, err
+}
+
+const deleteAccount = `-- name: DeleteAccount :one
+DELETE FROM accounts
+WHERE id = $1
+  AND user_id = $2
+RETURNING
+    id::text AS id,
+    name,
+    currency,
+    balance_in_minor_units
+`
+
+type DeleteAccountParams struct {
+	ID     uuid.UUID
+	UserID int64
+}
+
+type DeleteAccountRow struct {
+	ID                  string
+	Name                string
+	Currency            string
+	BalanceInMinorUnits int64
+}
+
+func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) (DeleteAccountRow, error) {
+	row := q.db.QueryRowContext(ctx, deleteAccount, arg.ID, arg.UserID)
+	var i DeleteAccountRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
