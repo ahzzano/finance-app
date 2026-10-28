@@ -12,6 +12,7 @@ import (
 var (
 	ErrorAccountNameExists = errors.New("account name already exists")
 	ErrorSessionNotFound   = errors.New("invalid or expired session")
+	ErrorAccountNotFound   = errors.New("account not found")
 )
 
 type AccountHandler struct {
@@ -26,6 +27,8 @@ func NewAccountHandler(accounts *AccountService, requireSession func(http.Handle
 func (h *AccountHandler) Mount(mux *http.ServeMux) {
 	mux.Handle("POST /api/accounts", h.requireSession(http.HandlerFunc(h.create)))
 	mux.Handle("GET /api/accounts", h.requireSession(http.HandlerFunc(h.list)))
+	mux.Handle("PATCH /api/accounts/{id}", h.requireSession(http.HandlerFunc(h.update)))
+	mux.Handle("DELETE /api/accounts/{id}", h.requireSession(http.HandlerFunc(h.delete)))
 }
 
 type createRequest struct {
@@ -113,6 +116,71 @@ func (h *AccountHandler) list(w http.ResponseWriter, r *http.Request) {
 	services.WriteData(w, http.StatusOK, listData{Accounts: out})
 }
 
+type updateRequest struct {
+	Name                *string `json:"name"`
+	Currency            *string `json:"currency"`
+	BalanceInMinorUnits *int64  `json:"balanceInMinorUnits"`
+}
+
+// update godoc
+//
+//	@Summary	Update an account
+//	@Tags		accounts
+//	@Accept		json
+//	@Produce	json
+//	@Param		id		path		string			true	"Account ID (uuid4)"
+//	@Param		body	body		updateRequest	false	"Fields to update"
+//	@Success	200		{object}	accountResponse
+//	@Failure	400		{object}	services.ErrorResponse
+//	@Failure	401		{object}	services.ErrorResponse
+//	@Failure	404		{object}	services.ErrorResponse
+//	@Failure	409		{object}	services.ErrorResponse
+//	@Failure	500		{object}	services.ErrorResponse
+//	@Router		/api/accounts/{id} [patch]
+func (h *AccountHandler) update(w http.ResponseWriter, r *http.Request) {
+	sess, ok := middleware.SessionFromContext(r.Context())
+	if !ok {
+		writeError(w, ErrorSessionNotFound)
+		return
+	}
+	var req updateRequest
+	if !services.Decode(w, r, &req) {
+		return
+	}
+	a, err := h.accounts.UpdateAccount(r.Context(), sess.UserID, r.PathValue("id"), req.Name, req.Currency, req.BalanceInMinorUnits)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	services.WriteData(w, http.StatusOK, accountData(a))
+}
+
+// delete godoc
+//
+//	@Summary	Delete an account
+//	@Tags		accounts
+//	@Produce	json
+//	@Param		id	path		string	true	"Account ID (uuid4)"
+//	@Success	200	{object}	accountResponse
+//	@Failure	400	{object}	services.ErrorResponse
+//	@Failure	401	{object}	services.ErrorResponse
+//	@Failure	404	{object}	services.ErrorResponse
+//	@Failure	500	{object}	services.ErrorResponse
+//	@Router		/api/accounts/{id} [delete]
+func (h *AccountHandler) delete(w http.ResponseWriter, r *http.Request) {
+	sess, ok := middleware.SessionFromContext(r.Context())
+	if !ok {
+		writeError(w, ErrorSessionNotFound)
+		return
+	}
+	a, err := h.accounts.DeleteAccount(r.Context(), sess.UserID, r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	services.WriteData(w, http.StatusOK, accountData(a))
+}
+
 func writeError(w http.ResponseWriter, err error) {
 	var ve services.ValidationError
 	switch {
@@ -122,6 +190,8 @@ func writeError(w http.ResponseWriter, err error) {
 		services.WriteError(w, services.APIError{Type: services.TypeConflict, Message: err.Error()})
 	case errors.Is(err, ErrorSessionNotFound):
 		services.WriteError(w, services.APIError{Type: services.TypeAuthentication, Message: err.Error()})
+	case errors.Is(err, ErrorAccountNotFound):
+		services.WriteError(w, services.APIError{Type: services.TypeNotFound, Message: err.Error()})
 	default:
 		log.Printf("accounts: %v", err)
 		services.WriteError(w, services.APIError{Type: services.TypeInternal, Message: "internal server error"})

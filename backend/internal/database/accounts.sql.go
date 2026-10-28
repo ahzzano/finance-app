@@ -7,6 +7,9 @@ package database
 
 import (
 	"context"
+	"database/sql"
+
+	"github.com/google/uuid"
 )
 
 const createAccount = `-- name: CreateAccount :one
@@ -49,6 +52,41 @@ func (q *Queries) CreateAccount(ctx context.Context, arg CreateAccountParams) (C
 		arg.BalanceInMinorUnits,
 	)
 	var i CreateAccountRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Currency,
+		&i.BalanceInMinorUnits,
+	)
+	return i, err
+}
+
+const deleteAccount = `-- name: DeleteAccount :one
+DELETE FROM accounts
+WHERE id = $1
+  AND user_id = $2
+RETURNING
+    id::text AS id,
+    name,
+    currency,
+    balance_in_minor_units
+`
+
+type DeleteAccountParams struct {
+	ID     uuid.UUID
+	UserID int64
+}
+
+type DeleteAccountRow struct {
+	ID                  string
+	Name                string
+	Currency            string
+	BalanceInMinorUnits int64
+}
+
+func (q *Queries) DeleteAccount(ctx context.Context, arg DeleteAccountParams) (DeleteAccountRow, error) {
+	row := q.db.QueryRowContext(ctx, deleteAccount, arg.ID, arg.UserID)
+	var i DeleteAccountRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
@@ -102,4 +140,52 @@ func (q *Queries) ListAccountsByUser(ctx context.Context, userID int64) ([]ListA
 		return nil, err
 	}
 	return items, nil
+}
+
+const updateAccount = `-- name: UpdateAccount :one
+UPDATE accounts
+SET
+    name = COALESCE($1, name),
+    currency = COALESCE($2, currency),
+    balance_in_minor_units = COALESCE($3, balance_in_minor_units)
+WHERE id = $4
+  AND user_id = $5
+RETURNING
+    id::text AS id,
+    name,
+    currency,
+    balance_in_minor_units
+`
+
+type UpdateAccountParams struct {
+	Name                sql.NullString
+	Currency            sql.NullString
+	BalanceInMinorUnits sql.NullInt64
+	ID                  uuid.UUID
+	UserID              int64
+}
+
+type UpdateAccountRow struct {
+	ID                  string
+	Name                string
+	Currency            string
+	BalanceInMinorUnits int64
+}
+
+func (q *Queries) UpdateAccount(ctx context.Context, arg UpdateAccountParams) (UpdateAccountRow, error) {
+	row := q.db.QueryRowContext(ctx, updateAccount,
+		arg.Name,
+		arg.Currency,
+		arg.BalanceInMinorUnits,
+		arg.ID,
+		arg.UserID,
+	)
+	var i UpdateAccountRow
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Currency,
+		&i.BalanceInMinorUnits,
+	)
+	return i, err
 }

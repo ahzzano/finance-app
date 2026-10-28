@@ -2,6 +2,8 @@ package services
 
 import (
 	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 )
 
@@ -66,10 +68,10 @@ func WriteData(w http.ResponseWriter, status int, data any) {
 	}{Data: data})
 }
 
-// Decode reads a JSON body (capped at 1MB) into v; on failure it writes a 400 and returns false.
+// Decode reads a JSON body (capped at 1MB) into v; an empty body leaves v zero-valued; on failure it writes a 400 and returns false.
 func Decode(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil && !errors.Is(err, io.EOF) {
 		WriteError(w, APIError{Type: TypeValidation, Message: "malformed request body"})
 		return false
 	}

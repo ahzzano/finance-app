@@ -39,4 +39,7 @@ jobs:
           url="$PG_URL?sslmode=disable&search_path=test"
           echo "TEST_DATABASE_URL=$url" >> "$GITHUB_ENV"
           go run "$GOOSE" -dir "$MIGRATIONS" postgres "$url" up
+      # docs/ is gitignored but imported by cmd/api.go, so generate it before building
+      - name: Generate swagger docs
+        run: go run github.com/swaggo/swag/cmd/swag@v1.16.6 init
       - run: go test ./...

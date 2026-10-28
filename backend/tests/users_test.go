@@ -80,7 +80,7 @@ func TestRegisterBadRequest(t *testing.T) {
 		field string
 	}{
 		{"malformed json", "{not json", ""},
-		{"empty body", "", ""},
+		{"empty body", "", "email"},
 		{"missing email", m{"password": "password123", "name": "A"}, "email"},
 		{"invalid email", m{"email": "not-an-email", "password": "password123", "name": "A"}, "email"},
 		{"missing password", m{"email": "a@x.com", "name": "A"}, "password"},
