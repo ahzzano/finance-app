@@ -40,6 +40,37 @@ A missing, invalid, or expired session returns `401` (`AUTHENTICATION_ERROR`).
 500 - Internal server error (`INTERNAL_ERROR`). Applies to every endpoint.
 
 # Accounts
+## Delete Account
+Endpoint: `DELETE /api/accounts/{id}`
+
+Requires the `session` cookie. Each session is mapped to exactly one user
+
+Expected Return 
+```json
+{
+    "data": {
+        "id":   string,
+        "name": string,                 
+        "currency": string,             
+        "balanceInMinorUnits": int64,
+    },
+    "errors": null,
+}
+```
+
+Deletes a user's savings account
+
+Account deletions are hard deletes
+
+If `id` does not exist within the user's data, return 404
+
+If the `id` is an invalid uuid4 string, return 400 (`VALIDATION_ERROR`)
+
+### Response Codes
+200 - Successful Deletion
+400 - Bad request (`VALIDATION_ERROR`)
+401 - User not authenticated (`AUTHENTICATION_ERROR`)
+
 ## Create Account
 Endpoint: `POST /api/accounts`
 
