@@ -71,3 +71,6 @@ To make a function that queries a database
     ```
 
 3. Generate the Go code using `sqlc generate`
+
+# Editing Queries
+- Always edit the .sql files and let sqlc generate the .go files. Do not directly modify the .go files
