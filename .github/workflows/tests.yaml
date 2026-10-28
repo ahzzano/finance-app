@@ -1,0 +1,42 @@
+name: Testing
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PG_URL: postgres://postgres:postgres@localhost:5432/postgres
+      MIGRATIONS: internal/database/migrations
+      GOOSE: github.com/pressly/goose/v3/cmd/goose@latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: backend/go.mod
+          cache-dependency-path: backend/go.sum
+      - name: Migrate test schema
+        run: |
+          psql "$PG_URL" -c "CREATE SCHEMA IF NOT EXISTS test"
+          url="$PG_URL?sslmode=disable&search_path=test"
+          echo "TEST_DATABASE_URL=$url" >> "$GITHUB_ENV"
+          go run "$GOOSE" -dir "$MIGRATIONS" postgres "$url" up
+      - run: go test ./...
