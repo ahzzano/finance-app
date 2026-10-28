@@ -1,5 +1,50 @@
 basePath: /
 definitions:
+  accounts.accountData:
+    properties:
+      balanceInMinorUnits:
+        type: integer
+      currency:
+        type: string
+      id:
+        type: string
+      name:
+        type: string
+    type: object
+  accounts.accountResponse:
+    properties:
+      data:
+        $ref: '#/definitions/accounts.accountData'
+      errors:
+        items:
+          $ref: '#/definitions/services.APIError'
+        type: array
+    type: object
+  accounts.createRequest:
+    properties:
+      balanceInMinorUnits:
+        type: integer
+      currency:
+        type: string
+      name:
+        type: string
+    type: object
+  accounts.listData:
+    properties:
+      accounts:
+        items:
+          $ref: '#/definitions/accounts.accountData'
+        type: array
+    type: object
+  accounts.listResponse:
+    properties:
+      data:
+        $ref: '#/definitions/accounts.listData'
+      errors:
+        items:
+          $ref: '#/definitions/services.APIError'
+        type: array
+    type: object
   services.APIError:
     properties:
       field:
@@ -82,6 +127,62 @@ info:
   title: Budgeting App API
   version: "1.0"
 paths:
+  /api/accounts:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/accounts.listResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: List the user's accounts
+      tags:
+      - accounts
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Account details
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/accounts.createRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/accounts.accountResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "409":
+          description: Conflict
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/services.ErrorResponse'
+      summary: Create an account
+      tags:
+      - accounts
   /api/users/login:
     post:
       consumes:
