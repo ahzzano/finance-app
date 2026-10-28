@@ -6,7 +6,18 @@ package database
 
 import (
 	"time"
+
+	"github.com/google/uuid"
 )
+
+type Account struct {
+	ID                  uuid.UUID
+	UserID              int64
+	Name                string
+	Currency            string
+	BalanceInMinorUnits int64
+	CreatedAt           time.Time
+}
 
 type FailedLogin struct {
 	ID          int64

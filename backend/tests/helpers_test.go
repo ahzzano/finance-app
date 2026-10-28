@@ -77,7 +77,7 @@ func TestMain(m *testing.M) {
 
 func resetDB(t *testing.T) {
 	t.Helper()
-	if _, err := pool.Exec(context.Background(), "TRUNCATE users, sessions, failed_logins RESTART IDENTITY CASCADE"); err != nil {
+	if _, err := pool.Exec(context.Background(), "TRUNCATE users, sessions, failed_logins, accounts RESTART IDENTITY CASCADE"); err != nil {
 		t.Fatal(err)
 	}
 }

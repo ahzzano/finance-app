@@ -39,6 +39,97 @@ A missing, invalid, or expired session returns `401` (`AUTHENTICATION_ERROR`).
 ## Common Response Codes
 500 - Internal server error (`INTERNAL_ERROR`). Applies to every endpoint.
 
+# Accounts
+## Create Account
+Endpoint: `POST /api/accounts`
+
+Requires the `session` cookie. Each session is mapped to exactly one user
+
+Expected Inputs:
+```js
+{
+    "name": string,             // REQUIRED
+    "currency": string,         // REQUIRED
+    "balanceInMinorUnits": int64, // OPTIONAL: Default to 0
+}
+```
+
+Expected Return: 
+```json
+{
+    "data": {
+        "id":   string,
+        "name": string,                 
+        "currency": string,             
+        "balanceInMinorUnits": int64,
+    },
+    "errors": null,
+}
+```
+
+Creates an account for the user
+
+Currency is in ISO 4217 code such as the following below
+Example:
+- PHP - Philippine Peso
+- USD - US Dollar
+- EUR - Euro
+
+`balanceInMinorUnits` is an integer in the currency's smallest unit, using that currency's ISO 4217 decimal places (exponent):
+
+| currency | exponent | balance |     means   |
+|----------|----------|---------|-------------|
+|    PHP   |    2     |  1050   |  10.50 PHP  |
+|    USD   |    2     |  1050   |  10.50 USD  |
+|    JPY   |    0     |  1050   |  1050 JPY   |
+
+Client will convert the balance with `amount = balanceInMinorUnits / 10^exponent`
+
+Invalid codes return 400 (VALIDATION_ERROR, field: "currency")
+
+Negative balances return 400 (VALIDATION_ERROR, field: "balanceInMinorUnits")
+
+Empty names return 400 (VALIDATION_ERROR, field: "name")
+
+Names should be unique for each user. Account names are case sensitive.
+Example:
+- User Roman can have an account named "PayPal" and Talia can also have an account named "PayPal"
+- User Benjamin cannot have two accounts named "PayPal"
+- However, Benjamin can have two accounts named "PayPal" and "paypal"
+
+### Response Codes
+201 - Created
+400 - Bad request (`VALIDATION_ERROR`)
+401 - User not authenticated (`AUTHENTICATION_ERROR`)
+409 - Account name already exists (`CONFLICT`)
+
+## Get Accounts 
+Endpoint: `GET /api/accounts`
+
+Requires the `session` cookie. Each session is mapped to exactly one user
+
+Expected Return:
+```json
+{
+    "data": {
+        "accounts": [
+            {
+                "id":                   string,
+                "name":                 string,
+                "currency":             string, 
+                "balanceInMinorUnits":  int64,
+            },
+        ]
+    },
+    "errors": null,
+}
+```
+
+Returns the user's accounts
+### Response Codes
+200 - OK
+401 - User not authenticated (`AUTHENTICATION_ERROR`)
+
 # User
 Service handles all user related features
 
