@@ -10,6 +10,7 @@ import (
 	"backend/internal/database"
 	"backend/services"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 	"golang.org/x/text/currency"
 )
@@ -53,4 +54,17 @@ func (s *AccountService) CreateAccount(ctx context.Context, userID int64, name, 
 
 func (s *AccountService) ListAccounts(ctx context.Context, userID int64) ([]database.ListAccountsByUserRow, error) {
 	return s.q.ListAccountsByUser(ctx, userID)
+}
+
+func (s *AccountService) DeleteAccount(ctx context.Context, userID int64, id string) (database.DeleteAccountRow, error) {
+	// String round-trip enforces the canonical lowercase hyphenated form
+	u, err := uuid.Parse(id)
+	if err != nil || u.Version() != 4 || u.Variant() != uuid.RFC4122 || id != u.String() {
+		return database.DeleteAccountRow{}, services.ValidationError{Field: "id", Message: "id must be a valid uuid4"}
+	}
+	a, err := s.q.DeleteAccount(ctx, database.DeleteAccountParams{ID: u, UserID: userID})
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, ErrorAccountNotFound
+	}
+	return a, err
 }
