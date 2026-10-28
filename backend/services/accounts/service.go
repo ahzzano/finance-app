@@ -73,6 +73,41 @@ func parseAccountID(id string) (uuid.UUID, error) {
 	return u, nil
 }
 
+func (s *AccountService) UpdateAccount(ctx context.Context, userID int64, id string, name, cur *string, balance *int64) (database.UpdateAccountRow, error) {
+	u, err := parseAccountID(id)
+	if err != nil {
+		return database.UpdateAccountRow{}, err
+	}
+	p := database.UpdateAccountParams{ID: u, UserID: userID}
+	if name != nil {
+		n, err := validName(*name)
+		if err != nil {
+			return database.UpdateAccountRow{}, err
+		}
+		p.Name = sql.NullString{String: n, Valid: true}
+	}
+	if cur != nil {
+		if !validCurrency(*cur) {
+			return database.UpdateAccountRow{}, services.ValidationError{Field: "currency", Message: "currency must be an uppercase ISO 4217 code"}
+		}
+		if balance == nil {
+			return database.UpdateAccountRow{}, services.ValidationError{Field: "balanceInMinorUnits", Message: "balanceInMinorUnits is required when currency is set"}
+		}
+		p.Currency = sql.NullString{String: *cur, Valid: true}
+	}
+	if balance != nil {
+		if *balance < 0 {
+			return database.UpdateAccountRow{}, services.ValidationError{Field: "balanceInMinorUnits", Message: "balanceInMinorUnits must not be negative"}
+		}
+		p.BalanceInMinorUnits = sql.NullInt64{Int64: *balance, Valid: true}
+	}
+	a, err := s.q.UpdateAccount(ctx, p)
+	if errors.Is(err, sql.ErrNoRows) {
+		return a, ErrorAccountNotFound
+	}
+	return a, mapNameConflict(err)
+}
+
 func (s *AccountService) ListAccounts(ctx context.Context, userID int64) ([]database.ListAccountsByUserRow, error) {
 	return s.q.ListAccountsByUser(ctx, userID)
 }

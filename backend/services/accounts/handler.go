@@ -27,6 +27,7 @@ func NewAccountHandler(accounts *AccountService, requireSession func(http.Handle
 func (h *AccountHandler) Mount(mux *http.ServeMux) {
 	mux.Handle("POST /api/accounts", h.requireSession(http.HandlerFunc(h.create)))
 	mux.Handle("GET /api/accounts", h.requireSession(http.HandlerFunc(h.list)))
+	mux.Handle("PATCH /api/accounts/{id}", h.requireSession(http.HandlerFunc(h.update)))
 	mux.Handle("DELETE /api/accounts/{id}", h.requireSession(http.HandlerFunc(h.delete)))
 }
 
@@ -113,6 +114,45 @@ func (h *AccountHandler) list(w http.ResponseWriter, r *http.Request) {
 		out = append(out, accountData(a))
 	}
 	services.WriteData(w, http.StatusOK, listData{Accounts: out})
+}
+
+type updateRequest struct {
+	Name                *string `json:"name"`
+	Currency            *string `json:"currency"`
+	BalanceInMinorUnits *int64  `json:"balanceInMinorUnits"`
+}
+
+// update godoc
+//
+//	@Summary	Update an account
+//	@Tags		accounts
+//	@Accept		json
+//	@Produce	json
+//	@Param		id		path		string			true	"Account ID (uuid4)"
+//	@Param		body	body		updateRequest	false	"Fields to update"
+//	@Success	200		{object}	accountResponse
+//	@Failure	400		{object}	services.ErrorResponse
+//	@Failure	401		{object}	services.ErrorResponse
+//	@Failure	404		{object}	services.ErrorResponse
+//	@Failure	409		{object}	services.ErrorResponse
+//	@Failure	500		{object}	services.ErrorResponse
+//	@Router		/api/accounts/{id} [patch]
+func (h *AccountHandler) update(w http.ResponseWriter, r *http.Request) {
+	sess, ok := middleware.SessionFromContext(r.Context())
+	if !ok {
+		writeError(w, ErrorSessionNotFound)
+		return
+	}
+	var req updateRequest
+	if !services.Decode(w, r, &req) {
+		return
+	}
+	a, err := h.accounts.UpdateAccount(r.Context(), sess.UserID, r.PathValue("id"), req.Name, req.Currency, req.BalanceInMinorUnits)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	services.WriteData(w, http.StatusOK, accountData(a))
 }
 
 // delete godoc
