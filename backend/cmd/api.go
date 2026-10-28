@@ -6,6 +6,7 @@ import (
 
 	"backend/internal/database"
 	"backend/middleware"
+	"backend/services/accounts"
 	"backend/services/users"
 
 	_ "backend/docs"
@@ -34,7 +35,9 @@ func NewAPI(config APIConfig) API {
 func (a *API) Mount() {
 	db := stdlib.OpenDBFromPool(a.config.DB)
 	a.mux.Handle("GET /swagger/", httpSwagger.WrapHandler)
-	users.NewUserHandler(users.NewUserService(db), middleware.RequireSession(database.New(db))).Mount(a.mux)
+	requireSession := middleware.RequireSession(database.New(db))
+	users.NewUserHandler(users.NewUserService(db), requireSession).Mount(a.mux)
+	accounts.NewAccountHandler(accounts.NewAccountService(db), requireSession).Mount(a.mux)
 }
 
 func (a *API) Handler() http.Handler { return middleware.JSONErrors(a.mux) }
