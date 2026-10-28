@@ -40,6 +40,56 @@ A missing, invalid, or expired session returns `401` (`AUTHENTICATION_ERROR`).
 500 - Internal server error (`INTERNAL_ERROR`). Applies to every endpoint.
 
 # Accounts
+## Update Account
+Endpoint: `PATCH /api/accounts/{id}`
+
+Requires the `session` cookie. Each session is mapped to exactly one user
+
+Expected Input:
+```json
+{
+    "name": string,                 // OPTIONAL
+    "currency": string,             // OPTIONAL
+    "balanceInMinorUnits": int64    // OPTIONAL
+}
+```
+
+Validate with the same rules as account creation
+
+Expected Return 
+```json
+{
+    "data": {
+        "id":   string,
+        "name": string,                 
+        "currency": string,             
+        "balanceInMinorUnits": int64,
+    },
+    "errors": null,
+}
+```
+
+Updates the user's bank account
+
+Omitted or null fields are left unchanged
+
+An empty body simply returns the account and changes nothing
+
+If the `id` is not a valid uuid, return 400 (`VALIDATION_ERROR`, "field": "id")
+
+To make balance changes smoother, if `currency` is present, then `balanceInMinorUnits` is required
+Otherwise, return 400 (`VALIDATION_ERROR`, "field": "balanceInMinorUnits")
+
+If the account does not exist within the user's accounts, return 404 (`NOT_FOUND`)
+404 also covers accounts owned by other users
+
+### Response Codes
+200 - Resource was successfully modified
+400 - Validation Error
+401 - User not authenticated
+404 - Not Found
+409 - An account name already exists within the user's accounts
+
 ## Delete Account
 Endpoint: `DELETE /api/accounts/{id}`
 
