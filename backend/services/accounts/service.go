@@ -33,10 +33,9 @@ func validCurrency(code string) bool {
 }
 
 func (s *AccountService) CreateAccount(ctx context.Context, userID int64, name, cur string, balance int64) (database.CreateAccountRow, error) {
-	name = strings.TrimSpace(name)
-	// Postgres TEXT rejects NUL bytes, which would otherwise surface as a 500
-	if n := utf8.RuneCountInString(name); n < 1 || n > 100 || strings.ContainsRune(name, 0) {
-		return database.CreateAccountRow{}, services.ValidationError{Field: "name", Message: "name must be 1-100 characters"}
+	name, err := validName(name)
+	if err != nil {
+		return database.CreateAccountRow{}, err
 	}
 	if !validCurrency(cur) {
 		return database.CreateAccountRow{}, services.ValidationError{Field: "currency", Message: "currency must be an uppercase ISO 4217 code"}
@@ -45,11 +44,33 @@ func (s *AccountService) CreateAccount(ctx context.Context, userID int64, name, 
 		return database.CreateAccountRow{}, services.ValidationError{Field: "balanceInMinorUnits", Message: "balanceInMinorUnits must not be negative"}
 	}
 	a, err := s.q.CreateAccount(ctx, database.CreateAccountParams{UserID: userID, Name: name, Currency: cur, BalanceInMinorUnits: balance})
+	return a, mapNameConflict(err)
+}
+
+func mapNameConflict(err error) error {
 	var pgErr *pgconn.PgError
 	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-		return a, ErrorAccountNameExists
+		return ErrorAccountNameExists
 	}
-	return a, err
+	return err
+}
+
+func validName(name string) (string, error) {
+	name = strings.TrimSpace(name)
+	// Postgres TEXT rejects NUL bytes, which would otherwise surface as a 500
+	if n := utf8.RuneCountInString(name); n < 1 || n > 100 || strings.ContainsRune(name, 0) {
+		return "", services.ValidationError{Field: "name", Message: "name must be 1-100 characters"}
+	}
+	return name, nil
+}
+
+func parseAccountID(id string) (uuid.UUID, error) {
+	// String round-trip enforces the canonical lowercase hyphenated form
+	u, err := uuid.Parse(id)
+	if err != nil || u.Version() != 4 || u.Variant() != uuid.RFC4122 || id != u.String() {
+		return uuid.Nil, services.ValidationError{Field: "id", Message: "id must be a valid uuid4"}
+	}
+	return u, nil
 }
 
 func (s *AccountService) ListAccounts(ctx context.Context, userID int64) ([]database.ListAccountsByUserRow, error) {
@@ -57,10 +78,9 @@ func (s *AccountService) ListAccounts(ctx context.Context, userID int64) ([]data
 }
 
 func (s *AccountService) DeleteAccount(ctx context.Context, userID int64, id string) (database.DeleteAccountRow, error) {
-	// String round-trip enforces the canonical lowercase hyphenated form
-	u, err := uuid.Parse(id)
-	if err != nil || u.Version() != 4 || u.Variant() != uuid.RFC4122 || id != u.String() {
-		return database.DeleteAccountRow{}, services.ValidationError{Field: "id", Message: "id must be a valid uuid4"}
+	u, err := parseAccountID(id)
+	if err != nil {
+		return database.DeleteAccountRow{}, err
 	}
 	a, err := s.q.DeleteAccount(ctx, database.DeleteAccountParams{ID: u, UserID: userID})
 	if errors.Is(err, sql.ErrNoRows) {
